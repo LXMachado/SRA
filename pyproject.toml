@@ -1,0 +1,23 @@
+[project]
+name = "sra"
+version = "0.1.0"
+description = "Sentinel Research Agent"
+requires-python = ">=3.11"
+readme = "README.md"
+authors = [{name = "Codex"}]
+dependencies = [
+    "langchain>=0.2.0",
+    "langgraph>=0.0.48",
+    "langchain-openai>=0.1.7",
+    "pydantic>=2.6.0",
+    "httpx>=0.26.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.12.0",
+]
+
+[project.scripts]
+sra = "sra.cli:app"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
