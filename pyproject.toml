@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Sentinel Research Agent"
 requires-python = ">=3.11"
 readme = "README.md"
-authors = [{name = "Codex"}]
+authors = [{name = "Alex"}]
 dependencies = [
     "langchain>=0.2.0",
     "langgraph>=0.0.48",
