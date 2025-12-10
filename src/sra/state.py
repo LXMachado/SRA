@@ -14,6 +14,7 @@ class SearchHit(TypedDict):
     title: str
     snippet: str
     url: str
+    source_id: str | None
 
 
 class AgentState(TypedDict, total=False):
@@ -22,5 +23,10 @@ class AgentState(TypedDict, total=False):
     messages: Annotated[List[BaseMessage], operator.add]
     research_query: str
     search_results: Annotated[List[SearchHit], operator.add]
+    search_error: str | None
+    num_results: int
+    freshness: str | None
+    iterations: int
+    max_iters: int
     status: Literal["CONTINUE", "FINISH"]
     final_report: FinalReport | None

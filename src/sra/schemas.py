@@ -24,6 +24,7 @@ class SearchInput(BaseModel):
 class Source(BaseModel):
     """A citation source used in the final report."""
 
+    source_id: str = Field(description="Identifier like S1 used for inline citations.")
     title: str = Field(description="Title of the source document or webpage.")
     url: str = Field(description="The URL link to the source document.")
 

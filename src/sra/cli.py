@@ -26,6 +26,10 @@ def run(query: str, max_iters: int = typer.Option(4, "--max-iters", min=1, help=
         "messages": [HumanMessage(content=query)],
         "research_query": "",
         "search_results": [],
+        "num_results": 5,
+        "freshness": None,
+        "iterations": 0,
+        "max_iters": max_iters,
         "status": "CONTINUE",
         "final_report": None,
     }
