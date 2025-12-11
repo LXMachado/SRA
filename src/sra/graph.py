@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import atexit
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import END, StateGraph
 
@@ -172,7 +172,6 @@ def build_workflow(settings: Settings):
         base = len(_dedupe_hits(state.get("search_results", [])))
         for idx, hit in enumerate(hits, start=1):
             hit["source_id"] = f"S{base + idx}"
-        path = "google_search"
         content_lines = [f"[Search Results]{' (error)' if error else ''}"]
         if error:
             content_lines.append(f"Error: {error}")
@@ -180,11 +179,7 @@ def build_workflow(settings: Settings):
             content_lines.append(_format_hits(hits))
         else:
             content_lines.append("No results.")
-        tool_message = ToolMessage(
-            content="\n".join(content_lines),
-            tool_call_id=path,
-            name=path,
-        )
+        tool_message = AIMessage(content="\n".join(content_lines))
         return {
             "search_results": hits,
             "messages": [tool_message],
