@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sentinel Research Agent</title>
+    <style>
+        :root {
+            --bg: #0a0a0b;
+            --card: #141416;
+            --border: #26262a;
+            --text: #f1f1f3;
+            --text-muted: #8a8a93;
+            --accent: #4a9eff;
+            --accent-hover: #6db1ff;
+            --success: #22c55e;
+            --error: #f43f5e;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--border);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 0.95rem;
+            transition: border-color 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .input-row .form-group {
+            flex: 1;
+        }
+
+        button {
+            width: 100%;
+            padding: 0.875rem 1.5rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover { background: var(--accent-hover); }
+        button:disabled {
+            background: var(--border);
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 1rem;
+            display: none;
+        }
+
+        .status.loading {
+            display: block;
+            background: rgba(74, 158, 255, 0.1);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+        }
+
+        .status.error {
+            display: block;
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+
+        .report {
+            display: none;
+        }
+
+        .report.show {
+            display: block;
+        }
+
+        .report h2 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .report h3 {
+            font-size: 1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--accent);
+        }
+
+        .summary {
+            background: var(--border);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .section-content {
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .sources {
+            margin-top: 1rem;
+        }
+
+        .source-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .source-item:last-child { border-bottom: none; }
+
+        .source-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+
+        .source-link:hover { text-decoration: underline; }
+
+        .citation {
+            color: var(--success);
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sentinel Research Agent</h1>
+            <p class="subtitle">AI-powered research assistant with live web retrieval</p>
+        </header>
+
+        <div class="card">
+            <form id="research-form">
+                <div class="form-group">
+                    <label for="query">Research Query</label>
+                    <input type="text" id="query" placeholder="e.g., How is the EU regulating frontier AI safety tests?" required>
+                </div>
+                <div class="input-row">
+                    <div class="form-group">
+                        <label for="max-iters">Max Iterations</label>
+                        <input type="number" id="max-iters" value="4" min="1" max="20">
+                    </div>
+                </div>
+                <button type="submit" id="submit-btn">Run Research</button>
+            </form>
+        </div>
+
+        <div id="status" class="status"></div>
+
+        <div id="report" class="card report">
+            <h2 id="report-topic"></h2>
+            <div class="summary" id="report-summary"></div>
+            <div id="report-sections"></div>
+            <div class="sources">
+                <h3>Sources</h3>
+                <div id="report-sources"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('research-form');
+        const statusEl = document.getElementById('status');
+        const reportEl = document.getElementById('report');
+        const submitBtn = document.getElementById('submit-btn');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const query = document.getElementById('query').value.trim();
+            const max_iters = parseInt(document.getElementById('max-iters').value);
+
+            if (!query) return;
+
+            submitBtn.disabled = true;
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Researching... this may take a minute.';
+            reportEl.classList.remove('show');
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, max_iters })
+                });
+
+                const text = await res.text();
+                if (!res.ok) {
+                    try {
+                        const err = JSON.parse(text);
+                        throw new Error(err.detail || `Request failed (${res.status})`);
+                    } catch (parseErr) {
+                        throw new Error(`Request failed (${res.status}): ${text || 'No response'}`);
+                    }
+                }
+
+                try {
+                    const data = JSON.parse(text);
+                    displayReport(data);
+                    statusEl.style.display = 'none';
+                } catch (parseErr) {
+                    throw new Error('Invalid JSON response from server');
+                }
+            } catch (err) {
+                statusEl.className = 'status error';
+                statusEl.textContent = err.message;
+                reportEl.classList.remove('show');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        function displayReport(data) {
+            document.getElementById('report-topic').textContent = data.topic;
+            document.getElementById('report-summary').textContent = data.executive_summary;
+
+            const sectionsDiv = document.getElementById('report-sections');
+            sectionsDiv.innerHTML = '';
+            data.sections.forEach(s => {
+                sectionsDiv.innerHTML += `
+                    <h3>${s.section_title}</h3>
+                    <div class="section-content">${s.content}</div>
+                `;
+            });
+
+            const sourcesDiv = document.getElementById('report-sources');
+            sourcesDiv.innerHTML = '';
+            data.sources.forEach((src, i) => {
+                sourcesDiv.innerHTML += `
+                    <div class="source-item">
+                        <a href="${src.url}" class="source-link" target="_blank">[S${i+1}] ${src.title}</a>
+                    </div>
+                `;
+            });
+
+            reportEl.classList.add('show');
+        }
+    </script>
+</body>
+</html>

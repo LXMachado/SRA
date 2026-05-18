@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage
 from openai import AuthenticationError, NotFoundError, RateLimitError
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
 
 from .config import Settings
@@ -34,8 +34,13 @@ class RunResponse(BaseModel):
     sources: list[dict]
 
 
+@app.get("/", response_class=HTMLResponse)
+def read_index():
+    return (Path(__file__).parent / "static" / "index.html").read_text()
+
+
 @app.post("/api/run", response_model=RunResponse)
-async def run_research(request: QueryRequest):
+def run_research(request: QueryRequest):
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path, override=True)
 
@@ -90,9 +95,4 @@ async def run_research(request: QueryRequest):
     if report is None:
         raise HTTPException(status_code=500, detail="Run completed without a report.")
 
-    return JSONResponse(content=report.model_dump())
-
-
-@app.get("/")
-async def read_root():
-    return {"message": "Sentinel Research Agent API", "usage": "POST /api/run"}
+    return report.model_dump()

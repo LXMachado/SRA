@@ -17,6 +17,20 @@ from .state import AgentState
 app = typer.Typer(help="Sentinel Research Agent CLI")
 
 
+@app.command()
+def ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the UI server."),
+    port: int = typer.Option(8000, "--port", help="Port for the UI server."),
+) -> None:
+    """Start the web UI server for the Sentinel Research Agent."""
+    import uvicorn
+
+    from .server import app as fastapi_app
+
+    typer.echo(f"Starting Sentinel Research Agent UI at http://{host}:{port}")
+    uvicorn.run(fastapi_app, host=host, port=port)
+
+
 def _execute(query: str, max_iters: int) -> None:
     """Execute the Sentinel Research Agent for the provided query."""
 
