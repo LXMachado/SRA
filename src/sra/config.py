@@ -19,6 +19,21 @@ class Settings:
         api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
             raise RuntimeError("OPENROUTER_API_KEY is required.")
+        if not api_key.startswith("sk-or-"):
+            raise RuntimeError(
+                "OPENROUTER_API_KEY appears invalid. It should start with 'sk-or-'."
+            )
+
+        model = os.getenv("OPENROUTER_MODEL")
+        if not model:
+            raise RuntimeError(
+                "OPENROUTER_MODEL is required (example: google/gemini-2.5-flash)."
+            )
+        if model.strip().lower() in {"openrouter/free", "free"}:
+            raise RuntimeError(
+                "OPENROUTER_MODEL='openrouter/free' is not a concrete model id. "
+                "Set an explicit model, e.g. google/gemini-2.5-flash."
+            )
 
         google_key = os.getenv("GOOGLE_SEARCH_API_KEY")
         if not google_key:
@@ -30,7 +45,7 @@ class Settings:
 
         return cls(
             openrouter_api_key=api_key,
-            openrouter_model=os.getenv("OPENROUTER_MODEL", "google/gemini-pro-1.5"),
+            openrouter_model=model,
             openrouter_base_url=os.getenv(
                 "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
             ),

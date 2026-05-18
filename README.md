@@ -117,17 +117,17 @@ The reporter node must return data that validates against `FinalReport`, ensurin
 2. **Set required environment variables**
    ```bash
    export OPENROUTER_API_KEY=...
-   export OPENROUTER_MODEL=google/gemini-pro-1.5   # optional override
-   export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1  # optional override
+   export OPENROUTER_MODEL=google/gemini-2.5-flash
+   export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
    export GOOGLE_SEARCH_API_KEY=...
    export GOOGLE_SEARCH_ENGINE_ID=...
    ```
    You can also place the values in a `.env` file for local runs.
 3. **Run the agent from the CLI**
-   ```bash
-   sra run "How is the EU regulating frontier AI safety tests?"
-   ```
-   The command prints a validated `FinalReport` JSON structure. Use `--max-iters` to control how many planner/search loops occur before forcing a finish.
+    ```bash
+    sra "How is the EU regulating frontier AI safety tests?"
+    ```
+    The command prints a validated `FinalReport` JSON structure. Use `--max-iters` to control how many planner/search loops occur before forcing a finish.
 
 ## 9. Workflow Diagram
 ```mermaid

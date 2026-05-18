@@ -6,6 +6,7 @@ from uuid import uuid4
 import typer
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
+from openai import AuthenticationError, NotFoundError
 
 from .config import Settings
 from .graph import build_workflow
@@ -34,7 +35,21 @@ def run(query: str, max_iters: int = typer.Option(4, "--max-iters", min=1, help=
         "final_report": None,
     }
     config = {"configurable": {"thread_id": str(uuid4())}, "recursion_limit": max_iters * 2}
-    final_state = workflow.invoke(initial_state, config=config)
+    try:
+        final_state = workflow.invoke(initial_state, config=config)
+    except AuthenticationError as exc:
+        typer.echo(
+            "OpenRouter authentication failed (401). "
+            "Verify OPENROUTER_API_KEY is active and belongs to your OpenRouter account."
+        )
+        raise typer.Exit(code=1) from exc
+    except NotFoundError as exc:
+        typer.echo(
+            "Configured model is unavailable on OpenRouter (404). "
+            "Set OPENROUTER_MODEL to a currently available concrete model id "
+            "(example: google/gemini-2.5-flash)."
+        )
+        raise typer.Exit(code=1) from exc
     report = final_state.get("final_report")
     if report is None:
         typer.echo("Run completed without a report. Check logs.")
