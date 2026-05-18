@@ -16,8 +16,11 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        base_url = os.getenv("LLM_BASE_URL") or os.getenv(
-            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        base_url = (
+            os.getenv("LLM_BASE_URL")
+            or os.getenv("OPENROUTER_BASE_URL")
+            or os.getenv("VENICE_BASE_URL")
+            or "https://openrouter.ai/api/v1"
         )
         base_url_lower = base_url.lower()
 
@@ -46,7 +49,11 @@ class Settings:
                 "API key appears invalid for OpenRouter. It should start with 'sk-or-'."
             )
 
-        model = os.getenv("LLM_MODEL") or os.getenv("OPENROUTER_MODEL")
+        model = (
+            os.getenv("LLM_MODEL")
+            or os.getenv("OPENROUTER_MODEL")
+            or os.getenv("VENICE_MODEL")
+        )
         if not model:
             raise RuntimeError(
                 "LLM_MODEL is required (legacy fallback: OPENROUTER_MODEL)."

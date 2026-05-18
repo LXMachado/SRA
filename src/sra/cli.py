@@ -23,6 +23,9 @@ def _execute(query: str, max_iters: int) -> None:
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path, override=True)
     settings = Settings.from_env()
+    typer.echo(
+        f"LLM config: base_url={settings.llm_base_url} model={settings.llm_model}"
+    )
     workflow = build_workflow(settings)
 
     initial_state: AgentState = {
