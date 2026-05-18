@@ -128,3 +128,41 @@ The reporter node must return data that validates against `FinalReport`, ensurin
    sra run "How is the EU regulating frontier AI safety tests?"
    ```
    The command prints a validated `FinalReport` JSON structure. Use `--max-iters` to control how many planner/search loops occur before forcing a finish.
+
+## 9. Workflow Diagram
+```mermaid
+flowchart TD
+    A[User Prompt] --> B[Planner Node]
+    B --> C[Search Tool Node<br/>Google Search API]
+    C --> D[Analyzer Node]
+    D -->|status=CONTINUE| C
+    D -->|status=FINISH| E[Reporter Node]
+    E --> F[Validated FinalReport JSON]
+```
+
+## 10. Architecture Section
+### 10.1 High-Level Flow
+- **Input Layer**: Receives a natural-language research prompt from CLI or API.
+- **Reasoning Layer**: Planner and Analyzer nodes iterate over query design and evidence sufficiency.
+- **Data Layer**: Search tool retrieves fresh web evidence and normalizes snippets.
+- **Output Layer**: Reporter generates a Pydantic-validated `FinalReport` payload.
+
+### 10.2 Core Runtime Components
+- **LangGraph State Machine**: Controls deterministic routing across planner/search/analyzer/reporter.
+- **Shared Agent State (`AgentState`)**: Carries messages, active query, accumulated evidence, and finish status.
+- **LLM Interface (LangChain + OpenRouter/Gemini)**: Produces planning, analysis, and structured synthesis.
+- **Schema Guardrails (Pydantic V2)**: Validates tool inputs and final outputs for downstream reliability.
+- **Search Integration (Google Search API)**: Supplies current external evidence for factual grounding.
+
+## 11. Practical Use Case
+### Regulatory Intelligence for AI Teams
+- **Scenario**: A policy lead asks, *"What are the latest requirements for evaluating frontier AI systems in the EU, UK, and US?"*
+- **How SRA Handles It**:
+  1. Planner decomposes the request into focused search queries by jurisdiction.
+  2. Search tool fetches recent sources from regulators, standards bodies, and trusted analysis.
+  3. Analyzer checks evidence coverage and may issue follow-up queries for gaps.
+  4. Reporter returns a structured `FinalReport` with:
+     - Executive summary of cross-region differences.
+     - Sectioned findings (EU AI Act, UK safety institute guidance, US agency directives).
+     - Source links for auditability and stakeholder review.
+- **Outcome**: The team receives a consistent, citation-backed report ready for internal compliance discussions or tracker ingestion.
