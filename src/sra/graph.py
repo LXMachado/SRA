@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import atexit
+import json
+import re
 
 from langchain_core.messages import AIMessage
 from langchain_core.prompts import ChatPromptTemplate
@@ -41,6 +43,51 @@ def _format_hits(hits: list[SearchHit]) -> str:
         prefix = f"[{source_id}]" if source_id else "-"
         formatted.append(f"{prefix} {hit['title']} ({hit['url']}): {snippet}")
     return "\n".join(formatted)
+
+
+def _extract_json_object(text: str) -> dict | None:
+    start = text.find("{")
+    end = text.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        return None
+    try:
+        return json.loads(text[start : end + 1])
+    except json.JSONDecodeError:
+        return None
+
+
+def _extract_field(text: str, field: str) -> str | None:
+    # Matches variants like `research_query: ...`, `"research_query": ...`,
+    # or markdown `**research_query:** ...`
+    pattern = rf"(?:\*\*)?{re.escape(field)}(?:\*\*)?\s*[:=]\s*['\"]?(.+?)['\"]?(?:$|\n)"
+    match = re.search(pattern, text, flags=re.IGNORECASE | re.MULTILINE)
+    return match.group(1).strip() if match else None
+
+
+def _extract_int(value: object, default: int = 5) -> int:
+    if isinstance(value, int):
+        return value
+    text = str(value or "")
+    match = re.search(r"\d+", text)
+    if not match:
+        return default
+    try:
+        return int(match.group(0))
+    except ValueError:
+        return default
+
+
+def _clean_optional_text(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip().strip("`").strip("\"'")
+    text = re.sub(r"^\*+|\*+$", "", text).strip()
+    lowered = text.lower()
+    if lowered in {"none", "null", "n/a", ""}:
+        return None
+    # Keep short freshness tokens only (e.g., d7, d30, w1).
+    token = re.match(r"^[a-zA-Z]\d{1,4}$", text)
+    return token.group(0) if token else None
 
 
 def build_workflow(settings: Settings):
@@ -145,7 +192,24 @@ def build_workflow(settings: Settings):
     reporter_chain = reporter_prompt | reporter_llm.with_structured_output(FinalReport)
 
     def planner_node(state: AgentState):
-        decision = planner_chain.invoke({"messages": state["messages"]})
+        try:
+            decision = planner_chain.invoke({"messages": state["messages"]})
+        except Exception:
+            raw = (planner_prompt | planner_llm).invoke({"messages": state["messages"]})
+            text = raw.content if isinstance(raw.content, str) else str(raw.content)
+            parsed = _extract_json_object(text) or {}
+            rq = parsed.get("research_query") or _extract_field(text, "research_query")
+            rationale = parsed.get("rationale") or _extract_field(text, "rationale")
+            num = parsed.get("num_results") or _extract_field(text, "num_results") or 5
+            fresh = parsed.get("freshness")
+            if fresh is None:
+                fresh = _extract_field(text, "freshness")
+            decision = PlannerDecision(
+                research_query=(rq or state["messages"][-1].content),
+                rationale=(rationale or "Fallback parse from non-JSON model output."),
+                num_results=_extract_int(num, default=5),
+                freshness=_clean_optional_text(fresh),
+            )
         planner_message = AIMessage(
             content=(
                 f"[Planner] Query: {decision.research_query}\n"
@@ -188,12 +252,35 @@ def build_workflow(settings: Settings):
         }
 
     def analyzer_node(state: AgentState):
-        decision = analyzer_chain.invoke(
-            {
-                "messages": state["messages"],
-                "search_context": _format_hits(state.get("search_results", [])),
-            }
-        )
+        try:
+            decision = analyzer_chain.invoke(
+                {
+                    "messages": state["messages"],
+                    "search_context": _format_hits(state.get("search_results", [])),
+                }
+            )
+        except Exception:
+            raw = (analyzer_prompt | analyzer_llm).invoke(
+                {
+                    "messages": state["messages"],
+                    "search_context": _format_hits(state.get("search_results", [])),
+                }
+            )
+            text = raw.content if isinstance(raw.content, str) else str(raw.content)
+            parsed = _extract_json_object(text) or {}
+            status = (
+                parsed.get("status")
+                or _extract_field(text, "status")
+                or ("FINISH" if state.get("iterations", 0) >= state.get("max_iters", 0) > 0 else "CONTINUE")
+            )
+            decision = AnalyzerDecision(
+                status="FINISH" if str(status).upper() == "FINISH" else "CONTINUE",
+                summary=parsed.get("summary") or _extract_field(text, "summary") or "Fallback parse from non-JSON model output.",
+                gaps=parsed.get("gaps") or [],
+                research_query=parsed.get("research_query") or _extract_field(text, "research_query"),
+                num_results=parsed.get("num_results"),
+                freshness=parsed.get("freshness"),
+            )
         next_query = decision.research_query or state["research_query"]
         next_num_results = decision.num_results or state.get("num_results", 5)
         next_freshness = (
