@@ -45,21 +45,21 @@ def _execute(query: str, max_iters: int) -> None:
         final_state = workflow.invoke(initial_state, config=config)
     except AuthenticationError as exc:
         typer.echo(
-            "OpenRouter authentication failed (401). "
-            "Verify OPENROUTER_API_KEY is active and belongs to your OpenRouter account."
+            "Provider authentication failed (401). "
+            "Verify LLM_API_KEY (or provider-specific key fallback) is valid for the configured LLM_BASE_URL."
         )
         raise typer.Exit(code=1) from exc
     except NotFoundError as exc:
         typer.echo(
-            "Configured model is unavailable on OpenRouter (404). "
-            "Set OPENROUTER_MODEL to a currently available concrete model id "
+            "Configured model is unavailable on the current provider (404). "
+            "Set LLM_MODEL to a currently available concrete model id "
             "(example: google/gemini-2.5-flash)."
         )
         raise typer.Exit(code=1) from exc
     except RateLimitError as exc:
         typer.echo(
-            "OpenRouter/provider rate limit hit (429). "
-            "Retry shortly, switch to a non-free model, or use BYOK in OpenRouter."
+            "Provider rate limit hit (429). "
+            "Retry shortly, switch to a non-free model, or use BYOK where supported."
         )
         raise typer.Exit(code=1) from exc
     report = final_state.get("final_report")

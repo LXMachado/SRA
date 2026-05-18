@@ -22,8 +22,8 @@ OpenRouter is the default provider.
 
 ```bash
 export LLM_API_KEY=...
-export OPENROUTER_MODEL=google/gemini-2.5-flash
-export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+export LLM_MODEL=google/gemini-2.5-flash
+export LLM_BASE_URL=https://openrouter.ai/api/v1
 
 export GOOGLE_SEARCH_API_KEY=...
 export GOOGLE_SEARCH_ENGINE_ID=...
@@ -132,14 +132,14 @@ Output:
 
 ### Default (GitHub-friendly): OpenRouter
 - Keep OpenRouter defaults in docs and examples.
-- `LLM_API_KEY` is recommended. `OPENROUTER_API_KEY` is still supported.
+- `LLM_*` variables are recommended. Legacy `OPENROUTER_*` variables are still supported for compatibility.
 
 ### Local Alternative: Venice
 If you use Venice locally, set:
 
 ```bash
-export OPENROUTER_BASE_URL=https://api.venice.ai/api/v1
-export OPENROUTER_MODEL=venice:uncensored
+export LLM_BASE_URL=https://api.venice.ai/api/v1
+export LLM_MODEL=venice:uncensored
 export LLM_API_KEY=...
 ```
 

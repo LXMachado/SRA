@@ -77,12 +77,16 @@ Notes:
 
 ### LLM/provider configuration
 
-- `OPENROUTER_BASE_URL` (default: `https://openrouter.ai/api/v1`)
-- `OPENROUTER_MODEL` (must be a concrete model ID)
+- `LLM_BASE_URL` (default fallback: `https://openrouter.ai/api/v1`)
+- `LLM_MODEL` (must be a concrete model ID)
 - API key resolution order:
   1. `LLM_API_KEY` (recommended)
   2. Venice path (`venice.ai` base URL): `VENICE_API_KEY`, then `OPENROUTER_API_KEY`
   3. OpenRouter path: `OPENROUTER_API_KEY`
+
+Legacy compatibility:
+- `OPENROUTER_BASE_URL` is used if `LLM_BASE_URL` is unset.
+- `OPENROUTER_MODEL` is used if `LLM_MODEL` is unset.
 
 Validation rules:
 - If base URL contains `openrouter.ai`, key must look like `sk-or-...`.
@@ -93,16 +97,16 @@ Validation rules:
 ### Default profile (GitHub docs default)
 
 ```bash
-export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-export OPENROUTER_MODEL=google/gemini-2.5-flash
+export LLM_BASE_URL=https://openrouter.ai/api/v1
+export LLM_MODEL=google/gemini-2.5-flash
 export LLM_API_KEY=...
 ```
 
 ### Local Venice profile
 
 ```bash
-export OPENROUTER_BASE_URL=https://api.venice.ai/api/v1
-export OPENROUTER_MODEL=venice:uncensored
+export LLM_BASE_URL=https://api.venice.ai/api/v1
+export LLM_MODEL=venice:uncensored
 export LLM_API_KEY=...
 ```
 
@@ -181,8 +185,8 @@ Run these after touching CLI/config/graph:
 
 1. OpenRouter happy path:
 ```bash
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1 \
-OPENROUTER_MODEL=google/gemini-2.5-flash \
+LLM_BASE_URL=https://openrouter.ai/api/v1 \
+LLM_MODEL=google/gemini-2.5-flash \
 LLM_API_KEY=... \
 GOOGLE_SEARCH_API_KEY=... \
 GOOGLE_SEARCH_ENGINE_ID=... \
@@ -191,8 +195,8 @@ sra "test query" --max-iters 1
 
 2. Venice path key resolution:
 ```bash
-OPENROUTER_BASE_URL=https://api.venice.ai/api/v1 \
-OPENROUTER_MODEL=venice:uncensored \
+LLM_BASE_URL=https://api.venice.ai/api/v1 \
+LLM_MODEL=venice:uncensored \
 LLM_API_KEY=... \
 GOOGLE_SEARCH_API_KEY=... \
 GOOGLE_SEARCH_ENGINE_ID=... \

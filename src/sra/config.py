@@ -16,7 +16,9 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
-        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        base_url = os.getenv("LLM_BASE_URL") or os.getenv(
+            "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        )
         base_url_lower = base_url.lower()
 
         # Provider-agnostic key takes precedence.
@@ -30,7 +32,7 @@ class Settings:
             )
             if not api_key:
                 raise RuntimeError(
-                    "LLM_API_KEY (recommended) or VENICE_API_KEY is required when OPENROUTER_BASE_URL targets Venice."
+                    "LLM_API_KEY (recommended) or VENICE_API_KEY is required when LLM_BASE_URL targets Venice."
                 )
         else:
             api_key = generic_key or os.getenv("OPENROUTER_API_KEY")
@@ -44,14 +46,14 @@ class Settings:
                 "API key appears invalid for OpenRouter. It should start with 'sk-or-'."
             )
 
-        model = os.getenv("OPENROUTER_MODEL")
+        model = os.getenv("LLM_MODEL") or os.getenv("OPENROUTER_MODEL")
         if not model:
             raise RuntimeError(
-                "OPENROUTER_MODEL is required (example: google/gemini-2.5-flash)."
+                "LLM_MODEL is required (legacy fallback: OPENROUTER_MODEL)."
             )
         if model.strip().lower() in {"openrouter/free", "free"}:
             raise RuntimeError(
-                "OPENROUTER_MODEL='openrouter/free' is not a concrete model id. "
+                "LLM_MODEL='openrouter/free' is not a concrete model id. "
                 "Set an explicit model, e.g. google/gemini-2.5-flash."
             )
 
