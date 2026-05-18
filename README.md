@@ -2,6 +2,14 @@
 
 SRA converts a natural-language research question into a structured JSON report with citations.
 
+## UI Preview
+
+### Research In Progress
+![SRA UI loading state](docs/images/sra-ui-loading.png)
+
+### Completed Report
+![SRA UI completed report](docs/images/sra-ui-report.png)
+
 ## What It Does
 - Runs a planner/search/analyzer loop to gather evidence.
 - Uses Google Custom Search for external sources.
