@@ -1,168 +1,166 @@
 # Sentinel Research Agent (SRA)
 
-## 1. Project Overview
-- **Goal**: Convert natural-language research requests into validated, multi-section reports that a downstream system can parse reliably.
-- **Approach**: LangGraph orchestrates a ReAct-style workflow across planner → search → analyzer loops, Pydantic V2 enforces schemas for tool inputs and the final deliverable, and OpenRouter-hosted Gemini (via LangChain) performs planning and synthesis while calling the Google Search API for fresh data.
-- **Key Requirements**: Deterministic structure, iterative reasoning with conditional routing, external search integration, and a final report that carries citations plus an executive summary.
+SRA converts a natural-language research question into a structured JSON report with citations.
 
-## 2. System Architecture
-| Component | Technology | Role | Rationale |
-| --- | --- | --- | --- |
-| Orchestrator | LangGraph | Defines the state machine and directed edges handling the planner/search/analyzer loop. | Supports conditional routing, memoryful loops, and typed state via `TypedDict`. |
-| State Object | `TypedDict` | Shared memory containing messages, current query, search results, and status. | Lightweight, compatible with LangGraph state management. |
-| LLM | Gemini via OpenRouter + LangChain | Handles reasoning, planning, summarization, and structured output. | Strong tool-calling support and structured output; OpenRouter simplifies model swaps. |
-| Validation | Pydantic V2 | Enforces schemas for tool inputs (`SearchInput`) and the final report (`FinalReport`). | Guarantees JSON compatibility, predictable downstream parsing. |
-| Tool | Google Search API | Provides real-time search results. | Supplies up-to-date evidence for reports. |
-| Export | (Future) Sheets connector | Optional post-processing step to push validated reports into Google Sheets. | Enables tracking and automation. |
+## What It Does
+- Runs a planner/search/analyzer loop to gather evidence.
+- Uses Google Custom Search for external sources.
+- Produces a validated `FinalReport` object (topic, executive summary, sections, sources).
+- Prints final report JSON to stdout via CLI.
 
-## 3. Agent State Definition
-```python
-class AgentState(TypedDict, total=False):
-    messages: Annotated[List[BaseMessage], operator.add]  # Chat history
-    research_query: str                                   # Focused search query
-    search_results: Annotated[List[SearchHit], operator.add]  # Normalized search hits
-    status: Literal["CONTINUE", "FINISH"]                 # Router flag
-    final_report: FinalReport | None                      # Reporter output
+## Quick Start
+
+### 1. Install
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
-## 4. Pydantic Schemas
+### 2. Configure Environment
+OpenRouter is the default provider.
 
-### 4.1 Tool Input Schema (`SearchInput`)
-```python
-from pydantic import BaseModel, Field
+```bash
+export LLM_API_KEY=...
+export OPENROUTER_MODEL=google/gemini-2.5-flash
+export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
-class SearchInput(BaseModel):
-    """Arguments passed into the Google Search API tool."""
-    query: str = Field(description="Well-formed search query.")
-    num_results: int = Field(default=5, ge=1, le=10, description="Number of search hits to fetch.")
-    freshness: str | None = Field(default=None, description="Optional time filter, e.g., 'd7' for last 7 days.")
+export GOOGLE_SEARCH_API_KEY=...
+export GOOGLE_SEARCH_ENGINE_ID=...
 ```
 
-### 4.2 Final Output Schema (`FinalReport`)
-```python
-from pydantic import BaseModel, Field
-from typing import List
+You can also place these values in `.env`.
 
-class Source(BaseModel):
-    """A citation source used in the final report."""
-    title: str = Field(description="Title of the source document or webpage.")
-    url: str = Field(description="The URL link to the source document.")
+### 3. Run
+Both forms are supported:
 
-class ReportSection(BaseModel):
-    """A single section of the final research report."""
-    section_title: str = Field(description="The title for this section (e.g., 'Key Findings', 'Market Impact').")
-    content: str = Field(description="Summarized content for this section, backed by search results.")
-
-class FinalReport(BaseModel):
-    """The complete, structured output report."""
-    topic: str = Field(description="The main topic of the original user query.")
-    executive_summary: str = Field(description="High-level summary of the entire report.")
-    sections: List[ReportSection] = Field(description="Structured body sections for the report.")
-    sources: List[Source] = Field(description="Unique external sources referenced.")
+```bash
+sra "How is the EU regulating frontier AI safety tests?"
 ```
-The reporter node must return data that validates against `FinalReport`, ensuring downstream consumers always receive a predictable JSON structure.
 
-## 5. LangGraph Workflow
-1. **START → Planner**  
-   - Input: user prompt.  
-   - Output: initial `research_query`, updated messages, `status='CONTINUE'`.
-2. **Planner → Search Tool**  
-   - Calls Google Search API with validated `SearchInput`.  
-   - Appends raw snippets/metadata to `search_results`.
-3. **Search Tool → Analyzer**  
-   - Analyzer reviews current `messages`, `search_results`, and the goal, then either:  
-     - Sets `status='FINISH'` if evidence is sufficient, or  
-     - Generates another `research_query` with `status='CONTINUE'`.
-4. **Analyzer Conditional Edge**  
-   - `status='CONTINUE'`: loop back to **Search Tool** (new query).  
-   - `status='FINISH'`: route to **Reporter**.
-5. **Reporter → END**  
-   - Reporter consumes `AgentState` and outputs a `FinalReport`.  
-   - Optional: pass validated report to a Sheets export node/webhook.
+```bash
+sra run "How is the EU regulating frontier AI safety tests?"
+```
 
-## 6. Implementation Plan
-1. **Scaffold LangGraph Project**
-   - Set up virtual environment, install `langgraph`, `langchain`, `pydantic`, `httpx`, `openrouter`, etc.
-   - Configure environment variables: `OPENROUTER_API_KEY`, `GOOGLE_SEARCH_API_KEY`, `GOOGLE_SEARCH_ENGINE_ID`.
-2. **Define Schemas & State**
-   - Place Pydantic models in `schemas.py`; define `AgentState` in `state.py`.
-3. **Implement Nodes**
-   - `planner`: LangChain LLM call using Gemini via OpenRouter, prompting for research decomposition.
-   - `search_tool`: Python node that validates `SearchInput`, calls Google Search API, normalizes snippets, and appends to state.
-   - `analyzer`: LLM call that decides whether to continue searching and emits next query/status.
-   - `reporter`: LLM forced to emit `FinalReport` using LangChain's Pydantic structured output parser.
-4. **Wire LangGraph**
-   - Build graph with conditional edges using LangGraph's `StateGraph`.
-   - Ensure `messages` list is updated after every LLM/tool node so context is preserved.
-5. **Validation & Testing**
-   - Unit-test `search_tool` separately using mocked API responses.
-   - Integration-test the full loop with stubbed LLM outputs to verify routing.
-   - Add schema validation tests ensuring reporter outputs valid `FinalReport`.
-6. **Deployment Hooks**
-   - Provide CLI entry point that accepts user question, runs the graph, and prints JSON report.
-   - Optional: push final JSON to Google Sheets via Apps Script webhook or Sheets API.
+Control loop depth:
 
-## 7. Validation & Monitoring
-- **Schema Enforcement**: Use Pydantic's `model_validate_json` on reporter output; fail fast if validation errors appear.
-- **Logging**: Track each node's input/output plus search queries for auditing.
-- **Source Coverage**: Analyzer should require at least two unique domains before finishing unless the question scope is narrow.
-- **Rate Limiting**: Implement throttling/backoff for Google Search API and OpenRouter calls.
-- **Evaluation Harness**: Maintain canned research prompts to regression-test loop behavior.
+```bash
+sra run "query" --max-iters 4
+```
 
-## 8. Getting Started
-1. **Install dependencies**
-   ```bash
-   pip install -e .
-   ```
-2. **Set required environment variables**
-   ```bash
-   export OPENROUTER_API_KEY=...
-   export OPENROUTER_MODEL=google/gemini-2.5-flash
-   export OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-   export GOOGLE_SEARCH_API_KEY=...
-   export GOOGLE_SEARCH_ENGINE_ID=...
-   ```
-   You can also place the values in a `.env` file for local runs.
-3. **Run the agent from the CLI**
-    ```bash
-    sra "How is the EU regulating frontier AI safety tests?"
-    ```
-    The command prints a validated `FinalReport` JSON structure. Use `--max-iters` to control how many planner/search loops occur before forcing a finish.
+## CLI Reference
 
-## 9. Workflow Diagram
+```bash
+sra --help
+```
+
+Key option:
+- `--max-iters`: maximum search/analyzer loop count before forced finish.
+
+## Workflow Diagram
+
 ```mermaid
 flowchart TD
-    A[User Prompt] --> B[Planner Node]
-    B --> C[Search Tool Node<br/>Google Search API]
-    C --> D[Analyzer Node]
-    D -->|status=CONTINUE| C
-    D -->|status=FINISH| E[Reporter Node]
-    E --> F[Validated FinalReport JSON]
+    A[User Query] --> B[Planner]
+    B --> C[Search Tool\nGoogle Custom Search]
+    C --> D[Analyzer]
+    D -->|CONTINUE| C
+    D -->|FINISH| E[Reporter]
+    D -->|max_iters reached| E
+    E --> F[FinalReport JSON]
 ```
 
-## 10. Architecture Section
-### 10.1 High-Level Flow
-- **Input Layer**: Receives a natural-language research prompt from CLI or API.
-- **Reasoning Layer**: Planner and Analyzer nodes iterate over query design and evidence sufficiency.
-- **Data Layer**: Search tool retrieves fresh web evidence and normalizes snippets.
-- **Output Layer**: Reporter generates a Pydantic-validated `FinalReport` payload.
+## Architecture Diagram
 
-### 10.2 Core Runtime Components
-- **LangGraph State Machine**: Controls deterministic routing across planner/search/analyzer/reporter.
-- **Shared Agent State (`AgentState`)**: Carries messages, active query, accumulated evidence, and finish status.
-- **LLM Interface (LangChain + OpenRouter/Gemini)**: Produces planning, analysis, and structured synthesis.
-- **Schema Guardrails (Pydantic V2)**: Validates tool inputs and final outputs for downstream reliability.
-- **Search Integration (Google Search API)**: Supplies current external evidence for factual grounding.
+```mermaid
+flowchart LR
+    U[CLI / User Input] --> G[LangGraph Orchestrator]
+    G --> P[Planner LLM]
+    G --> S[Search Node]
+    S --> GS[Google Search API]
+    G --> A[Analyzer LLM]
+    G --> R[Reporter LLM]
+    R --> V[Pydantic Validation\nFinalReport]
+    V --> O[JSON Output]
 
-## 11. Practical Use Case
-### Regulatory Intelligence for AI Teams
-- **Scenario**: A policy lead asks, *"What are the latest requirements for evaluating frontier AI systems in the EU, UK, and US?"*
-- **How SRA Handles It**:
-  1. Planner decomposes the request into focused search queries by jurisdiction.
-  2. Search tool fetches recent sources from regulators, standards bodies, and trusted analysis.
-  3. Analyzer checks evidence coverage and may issue follow-up queries for gaps.
-  4. Reporter returns a structured `FinalReport` with:
-     - Executive summary of cross-region differences.
-     - Sectioned findings (EU AI Act, UK safety institute guidance, US agency directives).
-     - Source links for auditability and stakeholder review.
-- **Outcome**: The team receives a consistent, citation-backed report ready for internal compliance discussions or tracker ingestion.
+    C[(Config / Env)] --> G
+    C --> P
+    C --> A
+    C --> R
+```
+
+## Runtime Architecture
+
+### Core Components
+- `LangGraph`: stateful orchestration and conditional routing.
+- `AgentState` (`TypedDict`): shared state across nodes.
+- `LangChain + OpenAI-compatible chat client`: planner, analyzer, reporter calls.
+- `Pydantic v2`: validates search inputs and final output schema.
+- `Google Custom Search`: retrieval layer for web evidence.
+
+### Node Responsibilities
+- `planner`: proposes next query, `num_results`, optional `freshness`.
+- `search_tool`: fetches and normalizes search hits; assigns source IDs.
+- `analyzer`: decides `CONTINUE` vs `FINISH`; can update next query settings.
+- `reporter`: builds `FinalReport` from accumulated context.
+
+## Data Contracts
+
+### Search Input
+- `query: str`
+- `num_results: int` (1..10)
+- `freshness: str | None`
+
+### Final Output (`FinalReport`)
+- `topic: str`
+- `executive_summary: str`
+- `sections: List[ReportSection]`
+- `sources: List[Source]`
+
+## Practical Use Case
+
+### Policy/Compliance Research
+Input:
+- "What changed in frontier AI safety requirements across EU, UK, and US in the last 12 months?"
+
+Output:
+- Executive summary for leadership.
+- Sectioned findings by jurisdiction.
+- Source list with links for review/audit.
+
+## Provider Notes
+
+### Default (GitHub-friendly): OpenRouter
+- Keep OpenRouter defaults in docs and examples.
+- `LLM_API_KEY` is recommended. `OPENROUTER_API_KEY` is still supported.
+
+### Local Alternative: Venice
+If you use Venice locally, set:
+
+```bash
+export OPENROUTER_BASE_URL=https://api.venice.ai/api/v1
+export OPENROUTER_MODEL=venice:uncensored
+export LLM_API_KEY=...
+```
+
+## Troubleshooting
+
+- `401 User not found`:
+  - API key is invalid for the selected provider.
+- `404 model unavailable`:
+  - model ID is not available on that provider.
+- `429 rate-limited`:
+  - free-tier/provider limit hit; retry or switch model/provider.
+- `OPENROUTER_MODEL='openrouter/free' is not a concrete model id`:
+  - set an explicit model ID.
+- Recursion limit errors:
+  - increase `--max-iters` or rerun (CLI already applies a safe recursion limit multiplier).
+
+## Project Layout
+
+- `src/sra/cli.py`: CLI entrypoint.
+- `src/sra/config.py`: env/config loading.
+- `src/sra/graph.py`: LangGraph workflow and node logic.
+- `src/sra/tools.py`: Google search integration.
+- `src/sra/schemas.py`: Pydantic schemas.
+- `src/sra/state.py`: shared agent state definition.

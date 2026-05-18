@@ -311,13 +311,42 @@ def build_workflow(settings: Settings):
 
     def reporter_node(state: AgentState):
         allowed_sources = [hit.get("source_id") for hit in _dedupe_hits(state.get("search_results", [])) if hit.get("source_id")]
-        report = reporter_chain.invoke(
-            {
-                "messages": state["messages"],
-                "search_context": _format_hits(state.get("search_results", [])),
-                "source_ids": ", ".join(allowed_sources) if allowed_sources else "None",
-            }
-        )
+        payload = {
+            "messages": state["messages"],
+            "search_context": _format_hits(state.get("search_results", [])),
+            "source_ids": ", ".join(allowed_sources) if allowed_sources else "None",
+        }
+        try:
+            report = reporter_chain.invoke(payload)
+        except Exception:
+            raw = (reporter_prompt | reporter_llm).invoke(payload)
+            text = raw.content if isinstance(raw.content, str) else str(raw.content)
+            parsed = _extract_json_object(text)
+            if parsed:
+                report = FinalReport.model_validate(parsed)
+            else:
+                hits = _dedupe_hits(state.get("search_results", []))
+                sources = [
+                    {"title": h.get("title", "Untitled source"), "url": h.get("url", "")}
+                    for h in hits
+                    if h.get("url")
+                ]
+                summary = "Unable to obtain strict structured output from model; generated fallback report from collected evidence."
+                section_lines = [
+                    f"[{h.get('source_id', '?')}] {h.get('title', '')}: {h.get('snippet', '')}"
+                    for h in hits[:8]
+                ]
+                report = FinalReport(
+                    topic=state["messages"][0].content if state.get("messages") else "Research topic",
+                    executive_summary=summary,
+                    sections=[
+                        {
+                            "section_title": "Key Findings",
+                            "content": "\n".join(section_lines) if section_lines else "No findings collected.",
+                        }
+                    ],
+                    sources=sources,
+                )
         reporter_message = AIMessage(
             content="[Reporter] Final report validated and ready for export."
         )

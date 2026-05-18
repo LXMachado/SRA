@@ -8,20 +8,40 @@ from dataclasses import dataclass
 class Settings:
     """Runtime configuration loaded from environment variables."""
 
-    openrouter_api_key: str
-    openrouter_model: str
-    openrouter_base_url: str
+    llm_api_key: str
+    llm_model: str
+    llm_base_url: str
     google_api_key: str
     google_cx: str
 
     @classmethod
     def from_env(cls) -> "Settings":
-        api_key = os.getenv("OPENROUTER_API_KEY")
-        if not api_key:
-            raise RuntimeError("OPENROUTER_API_KEY is required.")
-        if not api_key.startswith("sk-or-"):
+        base_url = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+        base_url_lower = base_url.lower()
+
+        # Provider-agnostic key takes precedence.
+        generic_key = os.getenv("LLM_API_KEY")
+
+        if "venice.ai" in base_url_lower:
+            api_key = (
+                generic_key
+                or os.getenv("VENICE_API_KEY")
+                or os.getenv("OPENROUTER_API_KEY")
+            )
+            if not api_key:
+                raise RuntimeError(
+                    "LLM_API_KEY (recommended) or VENICE_API_KEY is required when OPENROUTER_BASE_URL targets Venice."
+                )
+        else:
+            api_key = generic_key or os.getenv("OPENROUTER_API_KEY")
+            if not api_key:
+                raise RuntimeError(
+                    "LLM_API_KEY (recommended) or OPENROUTER_API_KEY is required."
+                )
+
+        if "openrouter.ai" in base_url and not api_key.startswith("sk-or-"):
             raise RuntimeError(
-                "OPENROUTER_API_KEY appears invalid. It should start with 'sk-or-'."
+                "API key appears invalid for OpenRouter. It should start with 'sk-or-'."
             )
 
         model = os.getenv("OPENROUTER_MODEL")
@@ -44,11 +64,9 @@ class Settings:
             raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID is required.")
 
         return cls(
-            openrouter_api_key=api_key,
-            openrouter_model=model,
-            openrouter_base_url=os.getenv(
-                "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
-            ),
+            llm_api_key=api_key,
+            llm_model=model,
+            llm_base_url=base_url,
             google_api_key=google_key,
             google_cx=google_cx,
         )
