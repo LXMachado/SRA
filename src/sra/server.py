@@ -19,13 +19,9 @@ from .state import AgentState
 
 app = FastAPI(title="Sentinel Research Agent UI")
 
-app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
-
-
 class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Research query to investigate")
     max_iters: int = Field(4, ge=1, le=20, description="Maximum planner/search loops")
-
 
 class RunResponse(BaseModel):
     topic: str
@@ -33,11 +29,9 @@ class RunResponse(BaseModel):
     sections: list[dict]
     sources: list[dict]
 
-
 @app.get("/", response_class=HTMLResponse)
 def read_index():
     return (Path(__file__).parent / "static" / "index.html").read_text()
-
 
 @app.post("/api/run", response_model=RunResponse)
 def run_research(request: QueryRequest):
@@ -96,3 +90,5 @@ def run_research(request: QueryRequest):
         raise HTTPException(status_code=500, detail="Run completed without a report.")
 
     return report.model_dump()
+
+app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
