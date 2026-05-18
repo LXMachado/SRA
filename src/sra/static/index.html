@@ -6,55 +6,66 @@
     <title>Sentinel Research Agent</title>
     <style>
         :root {
-            --bg: #0a0a0b;
-            --card: #141416;
-            --border: #26262a;
-            --text: #f1f1f3;
-            --text-muted: #8a8a93;
-            --accent: #4a9eff;
-            --accent-hover: #6db1ff;
-            --success: #22c55e;
-            --error: #f43f5e;
+            --bg: #f5f1e9;
+            --bg-ink: #1d1a17;
+            --card: rgba(255, 250, 242, 0.9);
+            --border: rgba(120, 103, 86, 0.28);
+            --text: #2d241e;
+            --text-muted: #645648;
+            --accent: #146356;
+            --accent-hover: #0f4b41;
+            --success: #1f8f5f;
+            --error: #b4233c;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg);
+            font-family: 'Avenir Next', 'Futura', 'Trebuchet MS', sans-serif;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(20, 99, 86, 0.14) 0%, transparent 35%),
+                radial-gradient(circle at 80% 10%, rgba(138, 111, 74, 0.18) 0%, transparent 30%),
+                linear-gradient(165deg, #f5f1e9 0%, #ece4d8 100%);
             color: var(--text);
             min-height: 100vh;
             line-height: 1.6;
+            padding: 2rem 0 3rem;
         }
 
         .container {
-            max-width: 800px;
+            max-width: 920px;
             margin: 0 auto;
-            padding: 2rem 1rem;
+            padding: 0 1rem;
         }
 
         header {
             text-align: center;
-            margin-bottom: 2rem;
+            margin-bottom: 1.5rem;
+            animation: fadeUp 0.45s ease-out;
         }
 
         h1 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
+            font-size: clamp(2rem, 4vw, 2.7rem);
+            letter-spacing: 0.01em;
+            font-weight: 700;
+            margin-bottom: 0.35rem;
+            color: var(--bg-ink);
         }
 
         .subtitle {
             color: var(--text-muted);
-            font-size: 0.95rem;
+            font-size: 1rem;
         }
 
         .card {
             background: var(--card);
             border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
             padding: 1.5rem;
             margin-bottom: 1rem;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 16px 40px rgba(70, 53, 39, 0.09);
+            animation: fadeUp 0.55s ease-out;
         }
 
         .form-group {
@@ -71,17 +82,18 @@
         input[type="text"], input[type="number"] {
             width: 100%;
             padding: 0.75rem 1rem;
-            background: var(--border);
+            background: #fffefb;
             border: 1px solid var(--border);
             border-radius: 8px;
             color: var(--text);
             font-size: 0.95rem;
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, box-shadow 0.2s;
         }
 
         input:focus {
             outline: none;
             border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(20, 99, 86, 0.16);
         }
 
         .input-row {
@@ -101,15 +113,18 @@
             border: none;
             border-radius: 8px;
             font-size: 0.95rem;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: background 0.2s, transform 0.15s ease, box-shadow 0.2s;
+            box-shadow: 0 10px 24px rgba(20, 99, 86, 0.2);
         }
 
         button:hover { background: var(--accent-hover); }
+        button:active { transform: translateY(1px); }
         button:disabled {
-            background: var(--border);
+            background: #b8aba0;
             cursor: not-allowed;
+            box-shadow: none;
         }
 
         .status {
@@ -122,7 +137,7 @@
 
         .status.loading {
             display: block;
-            background: rgba(74, 158, 255, 0.1);
+            background: rgba(20, 99, 86, 0.1);
             color: var(--accent);
             border: 1px solid var(--accent);
         }
@@ -154,10 +169,11 @@
         }
 
         .summary {
-            background: var(--border);
+            background: rgba(255, 255, 255, 0.56);
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1rem;
+            border: 1px solid var(--border);
         }
 
         .section-content {
@@ -187,6 +203,33 @@
         .citation {
             color: var(--success);
             font-weight: 500;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding-top: 1.25rem;
+            }
+
+            .card {
+                padding: 1rem;
+                border-radius: 14px;
+            }
+
+            .input-row {
+                flex-direction: column;
+                gap: 0;
+            }
         }
     </style>
 </head>
@@ -264,7 +307,8 @@
                 try {
                     const data = JSON.parse(text);
                     displayReport(data);
-                    statusEl.style.display = 'none';
+                    statusEl.className = 'status';
+                    statusEl.textContent = '';
                 } catch (parseErr) {
                     throw new Error('Invalid JSON response from server');
                 }
@@ -283,21 +327,31 @@
 
             const sectionsDiv = document.getElementById('report-sections');
             sectionsDiv.innerHTML = '';
-            data.sections.forEach(s => {
-                sectionsDiv.innerHTML += `
-                    <h3>${s.section_title}</h3>
-                    <div class="section-content">${s.content}</div>
-                `;
+            (data.sections || []).forEach((s) => {
+                const title = document.createElement('h3');
+                title.textContent = s.section_title || 'Section';
+                const content = document.createElement('div');
+                content.className = 'section-content';
+                content.textContent = s.content || '';
+                sectionsDiv.appendChild(title);
+                sectionsDiv.appendChild(content);
             });
 
             const sourcesDiv = document.getElementById('report-sources');
             sourcesDiv.innerHTML = '';
-            data.sources.forEach((src, i) => {
-                sourcesDiv.innerHTML += `
-                    <div class="source-item">
-                        <a href="${src.url}" class="source-link" target="_blank">[S${i+1}] ${src.title}</a>
-                    </div>
-                `;
+            (data.sources || []).forEach((src, i) => {
+                const item = document.createElement('div');
+                item.className = 'source-item';
+
+                const link = document.createElement('a');
+                link.href = src.url || '#';
+                link.className = 'source-link';
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                link.textContent = `[S${i + 1}] ${src.title || src.url || 'Untitled source'}`;
+
+                item.appendChild(link);
+                sourcesDiv.appendChild(item);
             });
 
             reportEl.classList.add('show');

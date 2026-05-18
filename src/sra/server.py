@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from openai import AuthenticationError, NotFoundError, RateLimitError
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel, Field
@@ -18,6 +19,15 @@ from .schemas import FinalReport
 from .state import AgentState
 
 app = FastAPI(title="Sentinel Research Agent UI")
+
+# Allow browser UI calls when frontend and API are served from different origins/ports.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Research query to investigate")
