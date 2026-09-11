@@ -59,7 +59,7 @@ class GoogleSearchTool:
                 return hits, None
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
-                last_error = f"HTTP {status}: {exc.response.text[:200]}"
+                last_error = self._format_http_error(exc.response)
                 if status in {429, 500, 502, 503, 504} and attempt < attempts:
                     time.sleep(backoff)
                     backoff *= 2
@@ -77,6 +77,31 @@ class GoogleSearchTool:
                 break
 
         return [], last_error
+
+    @staticmethod
+    def _format_http_error(response: httpx.Response) -> str:
+        try:
+            error = response.json().get("error", {})
+        except ValueError:
+            return f"HTTP {response.status_code}: {response.text[:200]}"
+
+        message = str(error.get("message") or response.text[:200])
+        reason = ""
+        errors = error.get("errors")
+        if isinstance(errors, list) and errors:
+            reason = str(errors[0].get("reason") or "")
+
+        if response.status_code == 400 and "API key not valid" in message:
+            return (
+                "Google Custom Search API key is invalid. "
+                "Update GOOGLE_SEARCH_API_KEY with a valid Google Cloud API key "
+                "that has the Custom Search API enabled."
+            )
+
+        if response.status_code in {400, 403} and reason:
+            return f"Google Custom Search API error ({reason}): {message}"
+
+        return f"HTTP {response.status_code}: {message[:200]}"
 
     def close(self) -> None:
         self._client.close()

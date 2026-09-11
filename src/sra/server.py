@@ -10,7 +10,7 @@ from openai import AuthenticationError, NotFoundError, RateLimitError
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from .config import Settings
@@ -42,6 +42,10 @@ class RunResponse(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 def read_index():
     return (Path(__file__).parent / "static" / "index.html").read_text()
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon():
+    return Response(status_code=204)
 
 @app.post("/api/run", response_model=RunResponse)
 def run_research(request: QueryRequest):
