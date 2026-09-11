@@ -137,7 +137,7 @@ Expected output shape:
   ],
   "sources": [
     {
-      "id": "S1",
+      "source_id": "S1",
       "title": "...",
       "url": "..."
     }
@@ -171,7 +171,13 @@ Expected output shape:
 - `topic: str`
 - `executive_summary: str`
 - `sections: List[ReportSection]`
+  - `section_title: str`
+  - `content: str`
+  - `citations: List[str]`
 - `sources: List[Source]`
+  - `source_id: str`
+  - `title: str`
+  - `url: str`
 
 ## Provider Notes
 

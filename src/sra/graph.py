@@ -310,7 +310,12 @@ def build_workflow(settings: Settings):
         }
 
     def reporter_node(state: AgentState):
-        allowed_sources = [hit.get("source_id") for hit in _dedupe_hits(state.get("search_results", [])) if hit.get("source_id")]
+        allowed_hits = [
+            hit
+            for hit in _dedupe_hits(state.get("search_results", []))
+            if hit.get("source_id") and hit.get("url")
+        ]
+        allowed_sources = [hit["source_id"] for hit in allowed_hits]
         payload = {
             "messages": state["messages"],
             "search_context": _format_hits(state.get("search_results", [])),
@@ -325,16 +330,18 @@ def build_workflow(settings: Settings):
             if parsed:
                 report = FinalReport.model_validate(parsed)
             else:
-                hits = _dedupe_hits(state.get("search_results", []))
                 sources = [
-                    {"title": h.get("title", "Untitled source"), "url": h.get("url", "")}
-                    for h in hits
-                    if h.get("url")
+                    {
+                        "source_id": h["source_id"],
+                        "title": h.get("title", "Untitled source"),
+                        "url": h["url"],
+                    }
+                    for h in allowed_hits
                 ]
                 summary = "Unable to obtain strict structured output from model; generated fallback report from collected evidence."
                 section_lines = [
                     f"[{h.get('source_id', '?')}] {h.get('title', '')}: {h.get('snippet', '')}"
-                    for h in hits[:8]
+                    for h in allowed_hits[:8]
                 ]
                 report = FinalReport(
                     topic=state["messages"][0].content if state.get("messages") else "Research topic",
@@ -343,6 +350,7 @@ def build_workflow(settings: Settings):
                         {
                             "section_title": "Key Findings",
                             "content": "\n".join(section_lines) if section_lines else "No findings collected.",
+                            "citations": allowed_sources[:8],
                         }
                     ],
                     sources=sources,

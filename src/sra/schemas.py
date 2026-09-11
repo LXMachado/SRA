@@ -38,6 +38,10 @@ class ReportSection(BaseModel):
     content: str = Field(
         description="Summarized content for this section, backed by search results."
     )
+    citations: List[str] = Field(
+        default_factory=list,
+        description="Source identifiers supporting this section, such as S1 and S2.",
+    )
 
 
 class FinalReport(BaseModel):
