@@ -339,16 +339,16 @@
 
             const sourcesDiv = document.getElementById('report-sources');
             sourcesDiv.innerHTML = '';
-            (data.sources || []).forEach((src, i) => {
+            (data.sources || []).filter((src) => src.source_id && src.url).forEach((src) => {
                 const item = document.createElement('div');
                 item.className = 'source-item';
 
                 const link = document.createElement('a');
-                link.href = src.url || '#';
+                link.href = src.url;
                 link.className = 'source-link';
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                link.textContent = `[S${i + 1}] ${src.title || src.url || 'Untitled source'}`;
+                link.textContent = `[${src.source_id}] ${src.title || src.url || 'Untitled source'}`;
 
                 item.appendChild(link);
                 sourcesDiv.appendChild(item);

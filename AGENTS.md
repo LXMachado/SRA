@@ -29,7 +29,8 @@ Primary goals:
   - Planner/Search/Analyzer/Reporter nodes.
   - Structured-output fallback parsing for models that ignore strict schemas.
 - `src/sra/tools.py`:
-  - Google Custom Search client wrapper.
+  - Provider-aware web search wrapper.
+  - Supports Tavily by default and Google Custom Search as a legacy option.
   - Retries transient failures with backoff.
 - `src/sra/schemas.py`:
   - Pydantic models: `SearchInput`, `FinalReport`, `Source`, `ReportSection`.
@@ -42,7 +43,7 @@ Primary goals:
    - `research_query`
    - `num_results`
    - optional `freshness`
-2. `search_tool` calls Google Custom Search and appends normalized hits.
+2. `search_tool` calls the configured web search provider and appends normalized hits.
 3. `analyzer` decides:
    - `CONTINUE` (loop to search), or
    - `FINISH` (route to reporter)
@@ -65,15 +66,25 @@ Important option:
 ```
 
 Notes:
-- In code, the command is a single Typer command that accepts `QUERY_PARTS...`.
-- Literal first token `run` is treated as compatibility alias and stripped.
+- In code, `src/sra/cli.py` uses an `argparse` dispatcher.
+- `sra "query"` and `sra run "query"` route to the same execution path.
 
 ## Configuration Contract
 
-### Required search configuration
+### Search provider configuration
 
-- `GOOGLE_SEARCH_API_KEY`
-- `GOOGLE_SEARCH_ENGINE_ID`
+- `SEARCH_PROVIDER` may be `tavily` or `google`.
+- If unset, config chooses `tavily` when `TAVILY_API_KEY` is present; otherwise it falls back to `google`.
+- Tavily path:
+  - `TAVILY_API_KEY`
+- Google legacy path:
+  - `GOOGLE_SEARCH_API_KEY`
+  - `GOOGLE_SEARCH_ENGINE_ID`
+
+Notes:
+- Tavily is the documented default for search retrieval.
+- Google Custom Search is retained for existing projects with Custom Search JSON API access.
+- Newer Google Cloud projects may return `403` entitlement errors for Custom Search JSON API even with a valid key and correct restrictions.
 
 ### LLM/provider configuration
 
@@ -97,17 +108,21 @@ Validation rules:
 ### Default profile (GitHub docs default)
 
 ```bash
-export LLM_BASE_URL=https://openrouter.ai/api/v1
-export LLM_MODEL=google/gemini-2.5-flash
-export LLM_API_KEY=...
+LLM_BASE_URL=https://openrouter.ai/api/v1
+LLM_MODEL=google/gemini-2.5-flash
+LLM_API_KEY=...
+SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=...
 ```
 
 ### Local Venice profile
 
 ```bash
-export LLM_BASE_URL=https://api.venice.ai/api/v1
-export LLM_MODEL=venice:uncensored
-export LLM_API_KEY=...
+LLM_BASE_URL=https://api.venice.ai/api/v1
+LLM_MODEL=venice:uncensored
+LLM_API_KEY=...
+SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=...
 ```
 
 ## Development Commands
@@ -188,8 +203,8 @@ Run these after touching CLI/config/graph:
 LLM_BASE_URL=https://openrouter.ai/api/v1 \
 LLM_MODEL=google/gemini-2.5-flash \
 LLM_API_KEY=... \
-GOOGLE_SEARCH_API_KEY=... \
-GOOGLE_SEARCH_ENGINE_ID=... \
+SEARCH_PROVIDER=tavily \
+TAVILY_API_KEY=... \
 sra "test query" --max-iters 1
 ```
 
@@ -198,18 +213,29 @@ sra "test query" --max-iters 1
 LLM_BASE_URL=https://api.venice.ai/api/v1 \
 LLM_MODEL=venice:uncensored \
 LLM_API_KEY=... \
+SEARCH_PROVIDER=tavily \
+TAVILY_API_KEY=... \
+sra "test query" --max-iters 1
+```
+
+3. Google legacy path, only when the project has Custom Search JSON API access:
+```bash
+LLM_BASE_URL=https://openrouter.ai/api/v1 \
+LLM_MODEL=google/gemini-2.5-flash \
+LLM_API_KEY=... \
+SEARCH_PROVIDER=google \
 GOOGLE_SEARCH_API_KEY=... \
 GOOGLE_SEARCH_ENGINE_ID=... \
 sra "test query" --max-iters 1
 ```
 
-3. CLI compatibility:
+4. CLI compatibility:
 ```bash
 sra "test query"
 sra run "test query"
 ```
 
-4. Fallback resilience:
+5. Fallback resilience:
 - Use a model known to ignore strict JSON and confirm output is still valid JSON.
 
 ## Security and Secrets
@@ -221,6 +247,7 @@ sra run "test query"
 ## When Updating README
 
 - Keep OpenRouter defaults in main setup instructions.
+- Keep Tavily as the documented default search provider.
 - Mention alternatives (like Venice) as optional/local.
 - Ensure command examples match actual CLI behavior.
 - Ensure diagrams match actual node transitions and forced-finish logic.

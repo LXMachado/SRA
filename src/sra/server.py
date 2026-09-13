@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from uuid import uuid4
 
@@ -15,7 +14,6 @@ from pydantic import BaseModel, Field
 
 from .config import Settings
 from .graph import build_workflow
-from .schemas import FinalReport
 from .state import AgentState
 
 app = FastAPI(title="Sentinel Research Agent UI")

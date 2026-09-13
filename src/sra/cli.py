@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import json
+import sys
 from pathlib import Path
 from uuid import uuid4
-from typing import Annotated
 
-import typer
 from dotenv import load_dotenv
 from langchain_core.messages import HumanMessage
 from openai import AuthenticationError, NotFoundError, RateLimitError
@@ -14,32 +14,78 @@ from .config import Settings
 from .graph import build_workflow
 from .state import AgentState
 
-app = typer.Typer(help="Sentinel Research Agent CLI")
+
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return parsed
 
 
-@app.command()
-def ui(
-    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind the UI server."),
-    port: int = typer.Option(8000, "--port", help="Port for the UI server."),
-) -> None:
-    """Start the web UI server for the Sentinel Research Agent."""
+def _query_from_parts(query_parts: list[str]) -> str:
+    if not query_parts:
+        raise ValueError("QUERY is required.")
+    query = " ".join(query_parts).strip()
+    if not query:
+        raise ValueError("QUERY is required.")
+    return query
+
+
+def _run_ui(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="sra ui",
+        description="Start the web UI server for the Sentinel Research Agent.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host to bind the UI server.")
+    parser.add_argument("--port", default=8000, type=int, help="Port for the UI server.")
+    args = parser.parse_args(argv)
+
     import uvicorn
 
     from .server import app as fastapi_app
 
-    typer.echo(f"Starting Sentinel Research Agent UI at http://{host}:{port}")
-    uvicorn.run(fastapi_app, host=host, port=port)
+    print(f"Starting Sentinel Research Agent UI at http://{args.host}:{args.port}")
+    uvicorn.run(fastapi_app, host=args.host, port=args.port)
+    return 0
 
 
-def _execute(query: str, max_iters: int) -> None:
+def _run_research_command(argv: list[str], prog: str) -> int:
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        description="Execute the Sentinel Research Agent for the provided query.",
+    )
+    parser.add_argument(
+        "--max-iters",
+        default=4,
+        type=_positive_int,
+        help="Maximum planner/search loops.",
+    )
+    parser.add_argument("query_parts", nargs="+", metavar="QUERY")
+    args = parser.parse_args(argv)
+
+    try:
+        query = _query_from_parts(args.query_parts)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return _execute(query, args.max_iters)
+
+
+def _execute(query: str, max_iters: int) -> int:
     """Execute the Sentinel Research Agent for the provided query."""
 
     env_path = Path(__file__).resolve().parents[2] / ".env"
     load_dotenv(dotenv_path=env_path, override=True)
-    settings = Settings.from_env()
-    typer.echo(
-        f"LLM config: base_url={settings.llm_base_url} model={settings.llm_model}"
-    )
+    try:
+        settings = Settings.from_env()
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    print(f"LLM config: base_url={settings.llm_base_url} model={settings.llm_model}")
+    print(f"Search provider: {settings.search_provider}")
     workflow = build_workflow(settings)
 
     initial_state: AgentState = {
@@ -53,60 +99,65 @@ def _execute(query: str, max_iters: int) -> None:
         "status": "CONTINUE",
         "final_report": None,
     }
-    # Planner -> search -> analyzer -> reporter can exceed max_iters*2 for small values.
     config = {
         "configurable": {"thread_id": str(uuid4())},
         "recursion_limit": max(8, max_iters * 4),
     }
     try:
         final_state = workflow.invoke(initial_state, config=config)
-    except AuthenticationError as exc:
-        typer.echo(
+    except AuthenticationError:
+        print(
             "Provider authentication failed (401). "
-            "Verify LLM_API_KEY (or provider-specific key fallback) is valid for the configured LLM_BASE_URL."
+            "Verify LLM_API_KEY (or provider-specific key fallback) is valid for the configured LLM_BASE_URL.",
+            file=sys.stderr,
         )
-        raise typer.Exit(code=1) from exc
-    except NotFoundError as exc:
-        typer.echo(
+        return 1
+    except NotFoundError:
+        print(
             "Configured model is unavailable on the current provider (404). "
             "Set LLM_MODEL to a currently available concrete model id "
-            "(example: google/gemini-2.5-flash)."
+            "(example: google/gemini-2.5-flash).",
+            file=sys.stderr,
         )
-        raise typer.Exit(code=1) from exc
-    except RateLimitError as exc:
-        typer.echo(
+        return 1
+    except RateLimitError:
+        print(
             "Provider rate limit hit (429). "
-            "Retry shortly, switch to a non-free model, or use BYOK where supported."
+            "Retry shortly, switch to a non-free model, or use BYOK where supported.",
+            file=sys.stderr,
         )
-        raise typer.Exit(code=1) from exc
+        return 1
+
     report = final_state.get("final_report")
     if report is None:
-        typer.echo("Run completed without a report. Check logs.")
-        raise typer.Exit(code=1)
+        print("Run completed without a report. Check logs.", file=sys.stderr)
+        return 1
 
-    typer.echo(json.dumps(report.model_dump(), indent=2))
+    print(json.dumps(report.model_dump(), indent=2))
+    return 0
 
 
-@app.command()
-def run(
-    query_parts: Annotated[
-        list[str], typer.Argument(help='Use either: sra "query" or sra run "query".')
-    ],
-    max_iters: int = typer.Option(
-        4, "--max-iters", min=1, help="Maximum planner/search loops."
-    ),
-) -> None:
-    """Execute the Sentinel Research Agent for the provided query."""
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in {"-h", "--help"}:
+        print(
+            "usage: sra [--max-iters MAX_ITERS] QUERY...\n"
+            "       sra run [--max-iters MAX_ITERS] QUERY...\n"
+            "       sra ui [--host HOST] [--port PORT]\n\n"
+            "Sentinel Research Agent CLI"
+        )
+        return 0
 
-    if not query_parts:
-        raise typer.BadParameter("QUERY is required.")
+    command = args[0].lower()
+    if command == "ui":
+        return _run_ui(args[1:])
+    if command == "run":
+        return _run_research_command(args[1:], "sra run")
+    return _run_research_command(args, "sra")
 
-    if query_parts[0].lower() == "run":
-        query_parts = query_parts[1:]
-        if not query_parts:
-            raise typer.BadParameter("QUERY is required after 'run'.")
 
-    query = " ".join(query_parts).strip()
-    if not query:
-        raise typer.BadParameter("QUERY is required.")
-    _execute(query, max_iters)
+app = main
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

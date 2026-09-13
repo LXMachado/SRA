@@ -11,8 +11,10 @@ class Settings:
     llm_api_key: str
     llm_model: str
     llm_base_url: str
-    google_api_key: str
-    google_cx: str
+    search_provider: str
+    tavily_api_key: str | None
+    google_api_key: str | None
+    google_cx: str | None
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -64,18 +66,31 @@ class Settings:
                 "Set an explicit model, e.g. google/gemini-2.5-flash."
             )
 
+        tavily_key = os.getenv("TAVILY_API_KEY")
         google_key = os.getenv("GOOGLE_SEARCH_API_KEY")
-        if not google_key:
-            raise RuntimeError("GOOGLE_SEARCH_API_KEY is required.")
-
         google_cx = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
-        if not google_cx:
-            raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID is required.")
+        search_provider = (
+            os.getenv("SEARCH_PROVIDER")
+            or ("tavily" if tavily_key else "google")
+        ).strip().lower()
+        if search_provider not in {"tavily", "google"}:
+            raise RuntimeError(
+                "SEARCH_PROVIDER must be either 'tavily' or 'google'."
+            )
+        if search_provider == "tavily" and not tavily_key:
+            raise RuntimeError("TAVILY_API_KEY is required when SEARCH_PROVIDER=tavily.")
+        if search_provider == "google":
+            if not google_key:
+                raise RuntimeError("GOOGLE_SEARCH_API_KEY is required when SEARCH_PROVIDER=google.")
+            if not google_cx:
+                raise RuntimeError("GOOGLE_SEARCH_ENGINE_ID is required when SEARCH_PROVIDER=google.")
 
         return cls(
             llm_api_key=api_key,
             llm_model=model,
             llm_base_url=base_url,
+            search_provider=search_provider,
+            tavily_api_key=tavily_key,
             google_api_key=google_key,
             google_cx=google_cx,
         )

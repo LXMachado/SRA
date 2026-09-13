@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import atexit
 import json
 import re
 
@@ -12,7 +11,7 @@ from .config import Settings
 from .llm import build_llm
 from .schemas import FinalReport, SearchInput
 from .state import AgentState, SearchHit
-from .tools import GoogleSearchTool
+from .tools import WebSearchTool
 
 
 _MAX_CONTEXT_HITS = 12
@@ -43,6 +42,96 @@ def _format_hits(hits: list[SearchHit]) -> str:
         prefix = f"[{source_id}]" if source_id else "-"
         formatted.append(f"{prefix} {hit['title']} ({hit['url']}): {snippet}")
     return "\n".join(formatted)
+
+
+def _strip_disallowed_citations(text: str, allowed_source_ids: set[str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        source_ids = [
+            source_id.strip()
+            for source_id in match.group(1).split(",")
+            if source_id.strip() in allowed_source_ids
+        ]
+        return f"[{', '.join(source_ids)}]" if source_ids else ""
+
+    return re.sub(r"\[((?:S\d+)(?:\s*,\s*S\d+)*)\]", replace, text).strip()
+
+
+def _extract_citation_ids(text: str) -> list[str]:
+    citation_ids: list[str] = []
+    for group in re.findall(r"\[((?:S\d+)(?:\s*,\s*S\d+)*)\]", text):
+        citation_ids.extend(source_id.strip() for source_id in group.split(","))
+    return citation_ids
+
+
+def _unique_allowed(source_ids: list[str], allowed_source_ids: set[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for source_id in source_ids:
+        if source_id in allowed_source_ids and source_id not in seen:
+            unique.append(source_id)
+            seen.add(source_id)
+    return unique
+
+
+def _sanitize_report_sources(
+    report: FinalReport, allowed_hits: list[SearchHit]
+) -> FinalReport:
+    """Remove model-invented sources/citations that did not come from search hits."""
+
+    allowed_by_id = {
+        hit["source_id"]: hit
+        for hit in allowed_hits
+        if hit.get("source_id") and hit.get("url")
+    }
+    allowed_source_ids = set(allowed_by_id)
+
+    executive_summary = _strip_disallowed_citations(
+        report.executive_summary, allowed_source_ids
+    )
+    sections = []
+    for section in report.sections:
+        content = _strip_disallowed_citations(section.content, allowed_source_ids)
+        citations = _unique_allowed(
+            [*section.citations, *_extract_citation_ids(content)], allowed_source_ids
+        )
+        sections.append(
+            {
+                "section_title": section.section_title,
+                "content": content,
+                "citations": citations,
+            }
+        )
+
+    referenced_source_ids = _unique_allowed(
+        [
+            *_extract_citation_ids(executive_summary),
+            *[
+                source_id
+                for section in sections
+                for source_id in section["citations"]
+            ],
+        ],
+        allowed_source_ids,
+    )
+    sources_by_id = {source.source_id: source for source in report.sources}
+    sources = []
+    for source_id in referenced_source_ids:
+        hit = allowed_by_id[source_id]
+        source = sources_by_id.get(source_id)
+        sources.append(
+            {
+                "source_id": source_id,
+                "title": source.title if source else hit.get("title", "Untitled source"),
+                "url": hit["url"],
+            }
+        )
+
+    return FinalReport(
+        topic=report.topic,
+        executive_summary=executive_summary,
+        sections=sections,
+        sources=sources,
+    )
 
 
 def _extract_json_object(text: str) -> dict | None:
@@ -96,8 +185,7 @@ def build_workflow(settings: Settings):
     planner_llm = build_llm(settings, temperature=0.2)
     analyzer_llm = build_llm(settings, temperature=0.1)
     reporter_llm = build_llm(settings, temperature=0.0, timeout=90)
-    search_tool = GoogleSearchTool(settings)
-    atexit.register(search_tool.close)
+    search_tool = WebSearchTool(settings)
 
     planner_prompt = ChatPromptTemplate.from_messages(
         [
@@ -355,6 +443,7 @@ def build_workflow(settings: Settings):
                     ],
                     sources=sources,
                 )
+        report = _sanitize_report_sources(report, allowed_hits)
         reporter_message = AIMessage(
             content="[Reporter] Final report validated and ready for export."
         )

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import operator
-from typing import Annotated, List, Literal, TypedDict
+from typing import Annotated, List, Literal, NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
 
@@ -14,7 +14,7 @@ class SearchHit(TypedDict):
     title: str
     snippet: str
     url: str
-    source_id: str | None
+    source_id: NotRequired[str]
 
 
 class AgentState(TypedDict, total=False):

@@ -6,9 +6,9 @@ from pydantic import BaseModel, Field
 
 
 class SearchInput(BaseModel):
-    """Arguments passed into the Google Search API tool."""
+    """Arguments passed into the configured search API tool."""
 
-    query: str = Field(description="The specific query string to send to Google Custom Search.")
+    query: str = Field(description="The specific query string to send to web search.")
     num_results: int = Field(
         default=5,
         ge=1,

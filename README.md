@@ -11,7 +11,7 @@ SRA takes a natural-language question, runs an iterative research workflow, and 
 ```mermaid
 flowchart TD
     A[User Query] --> B[Planner]
-    B --> C[Search Tool\nGoogle Custom Search]
+    B --> C[Search Tool\nTavily / Google]
     C --> D[Analyzer]
     D -->|CONTINUE| C
     D -->|FINISH| E[Reporter]
@@ -24,7 +24,7 @@ flowchart LR
     U[CLI / UI Input] --> G[LangGraph Orchestrator]
     G --> P[Planner Model]
     G --> S[Search Node]
-    S --> GS[Google Search API]
+    S --> WS[Web Search API]
     G --> A[Analyzer Model]
     G --> R[Reporter Model]
     R --> V[Pydantic Validation\nFinalReport]
@@ -47,7 +47,7 @@ flowchart LR
 ## What It Does
 
 - Runs a planner/search/analyzer loop to gather evidence.
-- Uses Google Custom Search for external retrieval.
+- Uses Tavily by default for external retrieval, with Google Custom Search kept as a legacy option.
 - Produces a validated `FinalReport` object (`topic`, `executive_summary`, `sections`, `sources`).
 - Supports CLI and web UI execution paths.
 
@@ -82,16 +82,26 @@ pip install -e .
 ### 2. Configure Environment
 OpenRouter is the default provider.
 
-```bash
-export LLM_API_KEY=...
-export LLM_MODEL=google/gemini-2.5-flash
-export LLM_BASE_URL=https://openrouter.ai/api/v1
+For `.env`, use plain `KEY=value` lines:
 
-export GOOGLE_SEARCH_API_KEY=...
-export GOOGLE_SEARCH_ENGINE_ID=...
+```bash
+LLM_API_KEY=...
+LLM_MODEL=google/gemini-2.5-flash
+LLM_BASE_URL=https://openrouter.ai/api/v1
+
+SEARCH_PROVIDER=tavily
+TAVILY_API_KEY=...
 ```
 
-You can also place these values in `.env`.
+Google Custom Search can still be used as a legacy option if your Google Cloud project has existing Custom Search JSON API access. Newer projects may receive `403` entitlement errors even with a valid key.
+
+```bash
+SEARCH_PROVIDER=google
+GOOGLE_SEARCH_API_KEY=...
+GOOGLE_SEARCH_ENGINE_ID=...
+```
+
+When setting variables directly in a terminal, prefix them with `export`.
 
 ### 3. Run
 Both forms are supported:
@@ -152,7 +162,7 @@ Expected output shape:
 - `AgentState` (`TypedDict`): shared state across workflow nodes.
 - `LangChain + OpenAI-compatible chat client`: planner, analyzer, reporter calls.
 - `Pydantic v2`: schema validation for planner input and final output.
-- `Google Custom Search`: retrieval layer for web evidence.
+- `Tavily` or `Google Custom Search`: retrieval layer for web evidence.
 
 ### Node Responsibilities
 - `planner`: proposes next query, `num_results`, and optional freshness.
@@ -187,9 +197,9 @@ Expected output shape:
 
 ### Optional Local Alternative: Venice
 ```bash
-export LLM_BASE_URL=https://api.venice.ai/api/v1
-export LLM_MODEL=venice:uncensored
-export LLM_API_KEY=...
+LLM_BASE_URL=https://api.venice.ai/api/v1
+LLM_MODEL=venice:uncensored
+LLM_API_KEY=...
 ```
 
 ## Troubleshooting
@@ -219,6 +229,6 @@ export LLM_API_KEY=...
 - `src/sra/server.py`: FastAPI UI backend and `/api/run` endpoint.
 - `src/sra/config.py`: environment parsing and provider validation.
 - `src/sra/graph.py`: LangGraph workflow and node logic.
-- `src/sra/tools.py`: Google search integration and retry logic.
+- `src/sra/tools.py`: web search provider integration and retry logic.
 - `src/sra/schemas.py`: Pydantic data models.
 - `src/sra/state.py`: shared graph state definition.
